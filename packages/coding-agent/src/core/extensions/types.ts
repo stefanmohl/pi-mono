@@ -59,6 +59,7 @@ import type {
 import type { SlashCommandInfo } from "../slash-commands.js";
 import type { SourceInfo } from "../source-info.js";
 import type { BuildSystemPromptOptions } from "../system-prompt.js";
+import type { ThemeData } from "../theme-data.js";
 import type { BashOperations } from "../tools/bash.js";
 import type { EditToolDetails } from "../tools/edit.js";
 import type {
@@ -118,10 +119,12 @@ export type AutocompleteProviderFactory = (current: AutocompleteProvider) => Aut
 export type EditorFactory = (tui: TUI, theme: EditorTheme, keybindings: KeybindingsManager) => EditorComponent;
 
 /**
- * UI context for extensions to request interactive UI.
- * Each mode (interactive, RPC, print) provides its own implementation.
+ * Renderer-agnostic UI context for extensions.
+ *
+ * Contains only methods that take no TUI types (Component, TUI, KeyId, etc.).
+ * Each mode provides its own implementation.
  */
-export interface ExtensionUIContext {
+export interface ExtensionUIContextBase {
 	/** Show a selector and return the user's choice. */
 	select(title: string, options: string[], opts?: ExtensionUIDialogOptions): Promise<string | undefined>;
 
@@ -159,7 +162,42 @@ export interface ExtensionUIContext {
 	/** Set the label shown for hidden thinking blocks. Call with no argument to restore default. */
 	setHiddenThinkingLabel(label?: string): void;
 
-	/** Set a widget to display above or below the editor. Accepts string array or component factory. */
+	/** Set a widget to display above or below the editor. */
+	setWidget(key: string, content: string[] | undefined, options?: ExtensionWidgetOptions): void;
+
+	/** Set the terminal window/tab title. */
+	setTitle(title: string): void;
+
+	/** Paste text into the editor, triggering paste handling (collapse for large content). */
+	pasteToEditor(text: string): void;
+
+	/** Set the text in the core input editor. */
+	setEditorText(text: string): void;
+
+	/** Get the current text from the core input editor. */
+	getEditorText(): string;
+
+	/** Show a multi-line editor for text editing. */
+	editor(title: string, prefill?: string): Promise<string | undefined>;
+
+	/** Get the current theme data for styling. */
+	readonly theme: ThemeData;
+
+	/** Get current tool output expansion state. */
+	getToolsExpanded(): boolean;
+
+	/** Set tool output expansion state. */
+	setToolsExpanded(expanded: boolean): void;
+}
+
+/**
+ * Full UI context for TUI-capable modes (interactive).
+ *
+ * Adds TUI-specific methods that take Component, TUI,
+ * KeyId, and other terminal rendering primitives.
+ */
+export interface ExtensionUIContext extends ExtensionUIContextBase {
+	/** Set a widget to display above or below the editor using a component factory. */
 	setWidget(key: string, content: string[] | undefined, options?: ExtensionWidgetOptions): void;
 	setWidget(
 		key: string,
@@ -182,9 +220,6 @@ export interface ExtensionUIContext {
 	/** Set a custom header component (shown at startup, above chat), or undefined to restore the built-in header. */
 	setHeader(factory: ((tui: TUI, theme: Theme) => Component & { dispose?(): void }) | undefined): void;
 
-	/** Set the terminal window/tab title. */
-	setTitle(title: string): void;
-
 	/** Show a custom component with keyboard focus. */
 	custom<T>(
 		factory: (
@@ -201,18 +236,6 @@ export interface ExtensionUIContext {
 			onHandle?: (handle: OverlayHandle) => void;
 		},
 	): Promise<T>;
-
-	/** Paste text into the editor, triggering paste handling (collapse for large content). */
-	pasteToEditor(text: string): void;
-
-	/** Set the text in the core input editor. */
-	setEditorText(text: string): void;
-
-	/** Get the current text from the core input editor. */
-	getEditorText(): string;
-
-	/** Show a multi-line editor for text editing. */
-	editor(title: string, prefill?: string): Promise<string | undefined>;
 
 	/** Stack additional autocomplete behavior on top of the built-in provider. */
 	addAutocompleteProvider(factory: AutocompleteProviderFactory): void;
@@ -255,9 +278,6 @@ export interface ExtensionUIContext {
 	/** Get the currently configured custom editor factory, or undefined when using the default editor. */
 	getEditorComponent(): EditorFactory | undefined;
 
-	/** Get the current theme for styling. */
-	readonly theme: Theme;
-
 	/** Get all available themes with their names and file paths. */
 	getAllThemes(): { name: string; path: string | undefined }[];
 
@@ -267,11 +287,8 @@ export interface ExtensionUIContext {
 	/** Set the current theme by name or Theme object. */
 	setTheme(theme: string | Theme): { success: boolean; error?: string };
 
-	/** Get current tool output expansion state. */
-	getToolsExpanded(): boolean;
-
-	/** Set tool output expansion state. */
-	setToolsExpanded(expanded: boolean): void;
+	/** Get the current TUI theme for ANSI styling (narrowed from ThemeData). */
+	readonly theme: Theme;
 }
 
 // ============================================================================

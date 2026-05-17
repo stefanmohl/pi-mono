@@ -6,6 +6,7 @@ import { type Static, Type } from "typebox";
 import { Compile } from "typebox/compile";
 import { getCustomThemesDir, getThemesDir } from "../../../config.js";
 import type { SourceInfo } from "../../../core/source-info.js";
+import type { ThemeBg, ThemeColor, ThemeData } from "../../../core/theme-data.js";
 import { closeWatcher, watchWithErrorHandler } from "../../../utils/fs-watch.js";
 import { highlight, supportsLanguage } from "../../../utils/syntax-highlight.js";
 
@@ -97,60 +98,7 @@ type ThemeJson = Static<typeof ThemeJsonSchema>;
 
 const validateThemeJson = Compile(ThemeJsonSchema);
 
-export type ThemeColor =
-	| "accent"
-	| "border"
-	| "borderAccent"
-	| "borderMuted"
-	| "success"
-	| "error"
-	| "warning"
-	| "muted"
-	| "dim"
-	| "text"
-	| "thinkingText"
-	| "userMessageText"
-	| "customMessageText"
-	| "customMessageLabel"
-	| "toolTitle"
-	| "toolOutput"
-	| "mdHeading"
-	| "mdLink"
-	| "mdLinkUrl"
-	| "mdCode"
-	| "mdCodeBlock"
-	| "mdCodeBlockBorder"
-	| "mdQuote"
-	| "mdQuoteBorder"
-	| "mdHr"
-	| "mdListBullet"
-	| "toolDiffAdded"
-	| "toolDiffRemoved"
-	| "toolDiffContext"
-	| "syntaxComment"
-	| "syntaxKeyword"
-	| "syntaxFunction"
-	| "syntaxVariable"
-	| "syntaxString"
-	| "syntaxNumber"
-	| "syntaxType"
-	| "syntaxOperator"
-	| "syntaxPunctuation"
-	| "thinkingOff"
-	| "thinkingMinimal"
-	| "thinkingLow"
-	| "thinkingMedium"
-	| "thinkingHigh"
-	| "thinkingXhigh"
-	| "bashMode";
-
-export type ThemeBg =
-	| "selectedBg"
-	| "userMessageBg"
-	| "customMessageBg"
-	| "toolPendingBg"
-	| "toolSuccessBg"
-	| "toolErrorBg";
+export type { ThemeBg, ThemeColor } from "../../../core/theme-data.js";
 
 type ColorMode = "truecolor" | "256color";
 
@@ -340,12 +288,14 @@ function resolveThemeColors<T extends Record<string, ColorValue>>(
 // Theme Class
 // ============================================================================
 
-export class Theme {
+export class Theme implements ThemeData {
 	readonly name?: string;
 	readonly sourcePath?: string;
 	sourceInfo?: SourceInfo;
 	private fgColors: Map<ThemeColor, string>;
 	private bgColors: Map<ThemeBg, string>;
+	private rawFgColors: Map<ThemeColor, string | number>;
+	private rawBgColors: Map<ThemeBg, string | number>;
 	private mode: ColorMode;
 
 	constructor(
@@ -358,14 +308,32 @@ export class Theme {
 		this.sourcePath = options.sourcePath;
 		this.sourceInfo = options.sourceInfo;
 		this.mode = mode;
+		this.rawFgColors = new Map();
+		this.rawBgColors = new Map();
 		this.fgColors = new Map();
 		for (const [key, value] of Object.entries(fgColors) as [ThemeColor, string | number][]) {
+			this.rawFgColors.set(key, value);
 			this.fgColors.set(key, fgAnsi(value, mode));
 		}
 		this.bgColors = new Map();
 		for (const [key, value] of Object.entries(bgColors) as [ThemeBg, string | number][]) {
+			this.rawBgColors.set(key, value);
 			this.bgColors.set(key, bgAnsi(value, mode));
 		}
+	}
+
+	/** Returns raw color value (hex string or 256-color index), not ANSI escape. */
+	getColor(name: ThemeColor): string | number {
+		const raw = this.rawFgColors.get(name);
+		if (raw === undefined) throw new Error(`Unknown theme color: ${name}`);
+		return raw;
+	}
+
+	/** Returns raw background color value (hex string or 256-color index), not ANSI escape. */
+	getBackground(name: ThemeBg): string | number {
+		const raw = this.rawBgColors.get(name);
+		if (raw === undefined) throw new Error(`Unknown theme background color: ${name}`);
+		return raw;
 	}
 
 	fg(color: ThemeColor, text: string): string {
